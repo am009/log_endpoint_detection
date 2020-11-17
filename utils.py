@@ -5,16 +5,17 @@ from dateutil import tz
 toaster = ToastNotifier()
 
 
-def notification(title,content=''):
+def notification(title, content=''):
     if content == '':
         content = title
     toaster.show_toast(title,
-                   content,
-                   icon_path=None,
-                   duration=5,
-                   threaded=True)
+                       content,
+                       icon_path=None,
+                       duration=5,
+                       threaded=True)
 
-def Utc_to_local(evt_utc_time):
+
+def utc_to_local(evt_utc_time):
     from_zone = tz.tzutc()
     to_zone = tz.tzlocal()
 

@@ -1,9 +1,7 @@
-
-
-import subprocess
 import win32evtlog
 import xmltodict
-from utils import Utc_to_local, notification, get_filename
+
+from utils import utc_to_local, notification
 
 service_outlier_executables_history = {}
 
@@ -11,14 +9,15 @@ outlier_parents_of_cmd_history = {}
 
 suspicious_parent = {}
 
-events_by_id={i:[] for i in range(24)}
+events_by_id = {i: [] for i in range(24)}
+
 
 def event_main_filter(event):
     record = win32evtlog.EvtRender(event, win32evtlog.EvtRenderEventXml)
     record_dict = xmltodict.parse(record)
 
     # UTC to Local Time
-    evt_local_time = Utc_to_local(record_dict['Event']['System']['TimeCreated']['@SystemTime'])
+    evt_local_time = utc_to_local(record_dict['Event']['System']['TimeCreated']['@SystemTime'])
     record_dict['Event']['System']['TimeCreated']['@SystemTime'] = evt_local_time
 
     temp_data = {}
@@ -46,11 +45,11 @@ def event_main_filter(event):
 
         if 'ParentCommandLine' in record_dict['Event']['EventData']:
             # 'C:\\WINDOWS\\system32\\DllHost.exe /Processid:{3E5FC7F9-9A51-4367-9063-A120244FBEC7}':
-            if '{3E5FC7F9-9A51-4367-9063-A120244FBEC7}' in record_dict['Event']['EventData']['ParentCommandLine'].upper():
+            if '{3E5FC7F9-9A51-4367-9063-A120244FBEC7}' in \
+                    record_dict['Event']['EventData']['ParentCommandLine'].upper():
                 print('COMICMLuaUtils-bypassUAC')
                 print(record_dict['Event']['EventData']['ParentCommandLine'])
                 notification('COMICMLuaUtils-bypassUAC Detected!')
-
 
     # if evt_id == 2:
     #     events_by_id[evt_id].append({'image': record_dict['Event']['EventData']['Image'],
@@ -59,19 +58,19 @@ def event_main_filter(event):
     if evt_id == 6:
         if record_dict['Event']['EventData']['Signature'] != 'Microsoft Windows':
             events_by_id[evt_id].append({'ImageLoaded': record_dict['Event']['EventData']['ImageLoaded'],
-                                        'Signature': record_dict['Event']['EventData']['Signature']})
+                                         'Signature': record_dict['Event']['EventData']['Signature']})
     # SYSMON EVENT ID 7 : DLL (IMAGE) LOADED BY PROCESS [ImageLoad]
     if evt_id == 7:
-        if record_dict['Event']['EventData']['Signature']!='Microsoft Windows':
+        if record_dict['Event']['EventData']['Signature'] != 'Microsoft Windows':
             events_by_id[evt_id].append({'Image': record_dict['Event']['EventData']['Image'],
-                                        'ImageLoaded': record_dict['Event']['EventData']['ImageLoaded']})
+                                         'ImageLoaded': record_dict['Event']['EventData']['ImageLoaded']})
         # dotLocal 被劫持dll的加载
         current = events_by_id[evt_id][-1]
         if '.exe.local\\' in current['ImageLoaded'].lower():
             print("dotLocal DLL hijack detected")
             print(events_by_id[evt_id][-1])
-            notification("dotLocal DLL hijack detected",'Image: {}\nLib: {}'
-                        .format(current['Image'], current['ImageLoaded']))
+            notification("dotLocal DLL hijack detected", 'Image: {}\nLib: {}'
+                         .format(current['Image'], current['ImageLoaded']))
     # SYSMON EVENT ID 8 : REMOTE THREAD CREATED [CreateRemoteThread]
     if evt_id == 8:
         events_by_id[evt_id].append({'SourceProcessId': record_dict['Event']['EventData']['SourceProcessId'],
@@ -83,7 +82,7 @@ def event_main_filter(event):
                                      'StartFunction': record_dict['Event']['EventData']['StartFunction']})
         print("RemoteThreadCreate detected")
         print(events_by_id[evt_id][-1])
-        notification("RemoteThreadCreate detected",'Source: {}\nTarget: {}'
+        notification("RemoteThreadCreate detected", 'Source: {}\nTarget: {}'
                      .format(events_by_id[evt_id][-1]['SourceImage'], events_by_id[evt_id][-1]['TargetImage']))
     # SYSMON EVENT ID 12 & 13 & 14 : REGISTRY MODIFICATION [RegistryEvent]
 
@@ -96,8 +95,8 @@ def event_main_filter(event):
         if '.exe.local\\' in current['TargetFilename'].lower():
             print("dotLocal DLL hijack file create!")
             print(events_by_id[evt_id][-1])
-            notification("dotLocal DLL hijack file create!",'Image: {}\nFile: {}'
-                        .format(current['Image'], current['TargetFilename']))
+            notification("dotLocal DLL hijack file create!", 'Image: {}\nFile: {}'
+                         .format(current['Image'], current['TargetFilename']))
 
     if evt_id == 13:
         events_by_id[evt_id].append({'Image': record_dict['Event']['EventData']['Image'],
@@ -118,7 +117,7 @@ def event_main_filter(event):
 
         if not record_dict['Event']['EventData']['TargetObject'].startswith('HKLM'):
             target = record_dict['Event']['EventData']['TargetObject']
-            target = target[target.rfind('\\')+1:].lower()
+            target = target[target.rfind('\\') + 1:].lower()
             # 检测windir环境变量改变 - 检测部分通过windir劫持的UAC绕过方法
             if target == 'windir':
                 print("Possible UACBypass: windir hijack!")
@@ -130,11 +129,8 @@ def event_main_filter(event):
                 print(current)
                 notification("Possible UACBypass: C# profile!")
 
-
         ind = current['TargetObject'].find("\\")
         ind = current['TargetObject'].find("\\", ind + 1) + 1
         # notification("Registry value set", 'Source: {}\nTarget: {}'
         #              .format(get_filename(current['Image']),
         #                      current['TargetObject'][ind:]))
-
-
