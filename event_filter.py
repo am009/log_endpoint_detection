@@ -1,5 +1,6 @@
 import win32evtlog
 import xmltodict
+import win32api,win32con
 
 from utils import utc_to_local, notification
 
@@ -129,8 +130,30 @@ def event_main_filter(event):
                 print(current)
                 notification("Possible UACBypass: C# profile!")
 
-        ind = current['TargetObject'].find("\\")
-        ind = current['TargetObject'].find("\\", ind + 1) + 1
+        sensitive_path = []
+        sensitive_path.append(r"Classes\ms-settings\Shell\Open\command")
+        sensitive_path.append("Classes\\Folder\\Shell\\Open\\command")
+        sensitive_path.append("Classes\\AppX82a6gwre4fdg3bt635tn5ctqjf8msdd2\\Shell\\Open\\command")
+        sensitive_path.append("Classes\\Launcher.SystemSettings\\Shell\\Open\\command")
+
+        reg_root = win32con.HKEY_CURRENT_USER
+        reg_path = "SOFTWARE\\"
+        reg_flags = win32con.WRITE_OWNER|win32con.KEY_WOW64_64KEY|win32con.KEY_ALL_ACCESS
+
+        for i in range(len(sensitive_path)):
+            if sensitive_path[i] in record_dict['Event']['EventData']['TargetObject']:
+                path = reg_path+sensitive_path[i]
+                key = win32api.RegOpenKeyEx(reg_root, path, 0, reg_flags)
+                value, key_type = win32api.RegQueryValueEx(key, '')
+                print(value, key_type)
+                if key_type == win32con.REG_LINK:
+                    notification('Sensitive registry path value changed', 'Symbolic Link')
+                else:
+                    notification('Sensitive registry path value changed')
+
+
+        # ind = current['TargetObject'].find("\\")
+        # ind = current['TargetObject'].find("\\", ind + 1) + 1
         # notification("Registry value set", 'Source: {}\nTarget: {}'
         #              .format(get_filename(current['Image']),
         #                      current['TargetObject'][ind:]))
