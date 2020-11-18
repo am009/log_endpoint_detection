@@ -2,7 +2,7 @@ import win32evtlog
 import xmltodict
 import win32api,win32con
 
-from utils import utc_to_local, notification
+from utils import utc_to_local, notification, check_reg_symlink
 
 service_outlier_executables_history = {}
 
@@ -11,6 +11,32 @@ outlier_parents_of_cmd_history = {}
 suspicious_parent = {}
 
 events_by_id = {i: [] for i in range(24)}
+
+# HKCU\Software\Classes\
+reg_hijack_dict = {
+    # "C:\Windows\WinSxS\amd64_microsoft-windows-fodhelper-ux_31bf3856ad364e35_10.0.19041.1_none_e8e077950faced1a\fodhelper.exe"
+    "fodhelper.exe": r"ms-settings\Shell\Open\command\(Default)",
+    # "C:\Windows\WinSxS\amd64_microsoft-windows-safedocs-main_31bf3856ad364e35_10.0.19041.610_none_031d733ac584ef8d\sdclt.exe"
+    "sdclt.exe": r"Folder\Shell\Open\command\(Default)",
+    # "C:\Windows\WinSxS\amd64_microsoft-windows-s..e-client-ui-wsreset_31bf3856ad364e35_10.0.19041.1_none_7c69077ba55f962b\WSReset.exe"
+    "WSReset.exe": r"AppX82a6gwre4fdg3bt635tn5ctqjf8msdd2\Shell\Open\command\(Default)",
+    # "C:\Windows\WinSxS\amd64_microsoft-windows-security-spp-ux_31bf3856ad364e35_10.0.19041.572_none_399674cffdbd6a66\slui.exe"
+    "slui.exe": r"Launcher.SystemSettings\Shell\Open\command\(Default)"
+}
+
+
+def reg_symhij_check(path_seg):
+    '''
+    循环检测一段路径上是否有符号链接，有则返回符号链接的路径，没有则返回None
+    '''
+    reg_root = win32con.HKEY_CURRENT_USER
+    current = 'Software\\Classes'
+    path_seg = path_seg.split('\\')
+
+    for seg in path_seg:
+        current = '\\'.join([current, seg])
+        if check_reg_symlink(reg_root, current):
+            return current
 
 
 def event_main_filter(event):
@@ -48,9 +74,18 @@ def event_main_filter(event):
             # 'C:\\WINDOWS\\system32\\DllHost.exe /Processid:{3E5FC7F9-9A51-4367-9063-A120244FBEC7}':
             if '{3E5FC7F9-9A51-4367-9063-A120244FBEC7}' in \
                     record_dict['Event']['EventData']['ParentCommandLine'].upper():
-                print('COMICMLuaUtils-bypassUAC')
+                print('COM-ICMLuaUtils-bypassUAC')
                 print(record_dict['Event']['EventData']['ParentCommandLine'])
-                notification('COMICMLuaUtils-bypassUAC Detected!')
+                notification('COM-ICMLuaUtils-bypassUAC Detected!')
+        for ex in reg_hijack_dict:
+            if (image.lower().startswith(r'C:\Windows\WinSxS'.lower()) or image.lower().startswith(r'C:\Windows\System32'.lower())) and ex.lower() in image.lower():
+                # check reg symlink
+                sym_path = reg_symhij_check(reg_hijack_dict[ex])
+                if sym_path != None:
+                    print('Possible registry UAC Hijack with symlink!')
+                    print(f'Path:{sym_path}')
+                    notification('Possible registry UAC Hijack with symlink!', f'Path:{sym_path}')
+
 
     # if evt_id == 2:
     #     events_by_id[evt_id].append({'image': record_dict['Event']['EventData']['Image'],
@@ -117,8 +152,9 @@ def event_main_filter(event):
             notification("Fileless Attack!")
 
         if not record_dict['Event']['EventData']['TargetObject'].startswith('HKLM'):
-            target = record_dict['Event']['EventData']['TargetObject']
-            target = target[target.rfind('\\') + 1:].lower()
+            # possibly HKCU
+            target_path = record_dict['Event']['EventData']['TargetObject']
+            target = target_path[target_path.rfind('\\') + 1:].lower()
             # 检测windir环境变量改变 - 检测部分通过windir劫持的UAC绕过方法
             if target == 'windir':
                 print("Possible UACBypass: windir hijack!")
@@ -129,27 +165,14 @@ def event_main_filter(event):
                 print("Possible UACBypass: C# profile!")
                 print(current)
                 notification("Possible UACBypass: C# profile!")
-
-        sensitive_path = []
-        sensitive_path.append(r"Classes\ms-settings\Shell\Open\command")
-        sensitive_path.append("Classes\\Folder\\Shell\\Open\\command")
-        sensitive_path.append("Classes\\AppX82a6gwre4fdg3bt635tn5ctqjf8msdd2\\Shell\\Open\\command")
-        sensitive_path.append("Classes\\Launcher.SystemSettings\\Shell\\Open\\command")
-
-        reg_root = win32con.HKEY_CURRENT_USER
-        reg_path = "SOFTWARE\\"
-        reg_flags = win32con.WRITE_OWNER|win32con.KEY_WOW64_64KEY|win32con.KEY_ALL_ACCESS
-
-        for i in range(len(sensitive_path)):
-            if sensitive_path[i] in record_dict['Event']['EventData']['TargetObject']:
-                path = reg_path+sensitive_path[i]
-                key = win32api.RegOpenKeyEx(reg_root, path, 0, reg_flags)
-                value, key_type = win32api.RegQueryValueEx(key, '')
-                print(value, key_type)
-                if key_type == win32con.REG_LINK:
-                    notification('Sensitive registry path value changed', 'Symbolic Link')
-                else:
-                    notification('Sensitive registry path value changed')
+            # print(target_path)
+            value = record_dict['Event']['EventData']['Details']
+            for path in reg_hijack_dict.values():
+                # print((target_path, path))
+                if path in target_path:
+                    print('Possible registry UAC Hijack!')
+                    print(f'Path:{target_path}\nValue:{value}')
+                    notification('Possible registry UAC Hijack!', f'Path:{target_path}\nValue:{value}')
 
 
         # ind = current['TargetObject'].find("\\")

@@ -524,7 +524,6 @@
 			<TargetFilename condition="begin with">C:\Windows\Installer\</TargetFilename> <!--Windows:Installer: Ignore MSI installer files caching-->
 			<!--SECTION: Windows:Updates-->
 			<TargetFilename condition="begin with">C:\$WINDOWS.~BT\Sources\</TargetFilename> <!-- Windows: Feature updates containing lots of .exe and .sys-->
-			<Image condition="begin with">C:\Windows\winsxs\amd64_microsoft-windows</Image> <!-- Windows: Windows update-->
 		</FileCreate>
 	</RuleGroup>
 
@@ -551,18 +550,18 @@
 		<!--DATA: EventType, UtcTime, ProcessGuid, ProcessId, Image, TargetObject, Details (can't filter on), NewName (can't filter on)-->
 	<RuleGroup name="" groupRelation="or">
 		<RegistryEvent onmatch="include">
+			<TargetObject condition="contains">\Environment\</TargetObject>
+			<!-- Some Reg Hijack UAC bypass -->
+			<TargetObject condition="contains">ms-settings\Shell\Open\command</TargetObject>
+			<TargetObject condition="contains">Folder\Shell\Open\command</TargetObject>
+			<TargetObject condition="contains">AppX82a6gwre4fdg3bt635tn5ctqjf8msdd2\Shell\Open\command</TargetObject>
+			<TargetObject condition="contains">Launcher.SystemSettings\Shell\Open\command</TargetObject>
 			<!--Autorun or Startups-->
 				<!--ADDITIONAL REFERENCE: [ http://www.ghacks.net/2016/06/04/windows-automatic-startup-locations/ ] -->
 				<!--ADDITIONAL REFERENCE: [ https://view.officeapps.live.com/op/view.aspx?src=https://arsenalrecon.com/downloads/resources/Registry_Keys_Related_to_Autorun.ods ] -->
 				<!--ADDITIONAL REFERENCE: [ http://www.silentrunners.org/launchpoints.html ] -->
 				<!--ADDITIONAL REFERENCE: [ https://www.microsoftpressstore.com/articles/article.aspx?p=2762082&seqNum=2 ] -->
 				<!--ADDITIONAL REFERENCE: [ https://web.archive.org/web/20200116001643/http://scholarworks.rit.edu/cgi/viewcontent.cgi?article=1533&context=theses | Understanding malware autostart techniques - Matthew Gottlieb ] -->
-			<TargetObject condition="contains">\Environment\</TargetObject>
-			<TargetObject condition="end with">\Software\Classes\ms-settings\Shell\Open\command</TargetObject>
-			<TargetObject condition="end with">\Software\Classes\Folder\Shell\Open\command</TargetObject>
-			<TargetObject condition="end with">\Software\Classes\AppX82a6gwre4fdg3bt635tn5ctqjf8msdd2\Shell\Open\command</TargetObject>
-			<TargetObject condition="end with">\Software\Classes\Launcher.SystemSettings\Shell\Open\command</TargetObject>
-
 			<TargetObject name="T1060,RunKey" condition="contains">CurrentVersion\Run</TargetObject> <!--Windows: Wildcard for Run keys, including RunOnce, RunOnceEx, RunServices, RunServicesOnce [Also covers terminal server] -->
 			<TargetObject name="T1060,RunPolicy" condition="contains">Policies\Explorer\Run</TargetObject> <!--Windows: Alternate runs keys | Credit @ion-storm-->
 			<TargetObject name="T1484" condition="contains">Group Policy\Scripts</TargetObject> <!--Windows: Group policy scripts-->
