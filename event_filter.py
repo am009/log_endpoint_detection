@@ -40,10 +40,13 @@ def reg_symhij_check(path_seg):
 
 
 def event_main_filter(event):
+    '''
+    判断事件中是否存在可能的UAC绕过行为
+    '''
     record = win32evtlog.EvtRender(event, win32evtlog.EvtRenderEventXml)
     record_dict = xmltodict.parse(record)
 
-    # UTC to Local Time
+    # 转换为本地时区
     evt_local_time = utc_to_local(record_dict['Event']['System']['TimeCreated']['@SystemTime'])
     record_dict['Event']['System']['TimeCreated']['@SystemTime'] = evt_local_time
 
@@ -71,12 +74,15 @@ def event_main_filter(event):
         # events_by_id[evt_id].append({'image': record_dict['Event']['EventData']['Image']})
 
         if 'ParentCommandLine' in record_dict['Event']['EventData']:
+            # COM-ICMLuaUtils-bypassUAC
             # 'C:\\WINDOWS\\system32\\DllHost.exe /Processid:{3E5FC7F9-9A51-4367-9063-A120244FBEC7}':
             if '{3E5FC7F9-9A51-4367-9063-A120244FBEC7}' in \
                     record_dict['Event']['EventData']['ParentCommandLine'].upper():
                 print('COM-ICMLuaUtils-bypassUAC')
                 print(record_dict['Event']['EventData']['ParentCommandLine'])
                 notification('COM-ICMLuaUtils-bypassUAC Detected!')
+        
+        # 判断是不是会被劫持的自动提权exe启动，是则检查对应的会被劫持的路径。
         for ex in reg_hijack_dict:
             if (image.lower().startswith(r'C:\Windows\WinSxS'.lower()) or image.lower().startswith(r'C:\Windows\System32'.lower())) and ex.lower() in image.lower():
                 # check reg symlink
@@ -109,6 +115,7 @@ def event_main_filter(event):
                          .format(current['Image'], current['ImageLoaded']))
     # SYSMON EVENT ID 8 : REMOTE THREAD CREATED [CreateRemoteThread]
     if evt_id == 8:
+        # 远程线程注入
         events_by_id[evt_id].append({'SourceProcessId': record_dict['Event']['EventData']['SourceProcessId'],
                                      'SourceImage': record_dict['Event']['EventData']['SourceImage'],
                                      'TargetProcessId': record_dict['Event']['EventData']['TargetProcessId'],
@@ -120,7 +127,6 @@ def event_main_filter(event):
         print(events_by_id[evt_id][-1])
         notification("RemoteThreadCreate detected", 'Source: {}\nTarget: {}'
                      .format(events_by_id[evt_id][-1]['SourceImage'], events_by_id[evt_id][-1]['TargetImage']))
-    # SYSMON EVENT ID 12 & 13 & 14 : REGISTRY MODIFICATION [RegistryEvent]
 
     # SYSMON EVENT ID 11 : FILE CREATED [FileCreate]
     if evt_id == 11:
@@ -128,12 +134,14 @@ def event_main_filter(event):
                                      'Image': record_dict['Event']['EventData']['Image'],
                                      'TargetFilename': record_dict['Event']['EventData']['TargetFilename']})
         current = events_by_id[evt_id][-1]
+        # dotLocal机制的DLL劫持检测 - 判断是否有文件创建在'*.exe.local/'的路径内
         if '.exe.local\\' in current['TargetFilename'].lower():
             print("dotLocal DLL hijack file create!")
             print(events_by_id[evt_id][-1])
             notification("dotLocal DLL hijack file create!", 'Image: {}\nFile: {}'
                          .format(current['Image'], current['TargetFilename']))
 
+    # SYSMON EVENT ID 12 & 13 & 14 : REGISTRY MODIFICATION [RegistryEvent]
     if evt_id == 13:
         events_by_id[evt_id].append({'Image': record_dict['Event']['EventData']['Image'],
                                      'TargetObject': record_dict['Event']['EventData']['TargetObject']
@@ -167,6 +175,7 @@ def event_main_filter(event):
                 notification("Possible UACBypass: C# profile!")
             # print(target_path)
             value = record_dict['Event']['EventData']['Details']
+            # 对每个可能被劫持路径判断一下，看看当前修改的注册表是不是用来劫持的位置
             for path in reg_hijack_dict.values():
                 # print((target_path, path))
                 if path in target_path:

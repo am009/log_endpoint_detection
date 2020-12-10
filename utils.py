@@ -43,6 +43,7 @@ def check_reg_symlink(reg_root, reg_path):
         # (2, 'RegOpenKeyEx', 'The system cannot find the file specified.')
         # print(e.__dict__)
         # 'cannot find' or '找不到' in e.strerror
+        # 根据系统语言的不同，返回的可能是中文也可能是英文，所以不做判断
         return False
     try:
         res = win32api.RegQueryValueEx(key, "SymbolicLinkValue")

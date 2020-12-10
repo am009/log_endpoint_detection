@@ -59,6 +59,9 @@ def get_last_days_history(days, callback_func=print_event):
 # 回调函数参数是日志的handle
 # 坑人的地方在于不把事件拿干净就不会来新的事件通知，导致死锁等待
 def register_listener(callback_func=print_event):
+    '''
+    开始监听Sysmon事件，当事件发生的时候调用监听函数。
+    '''
     query_text = "*"
     channel_path = "Microsoft-Windows-Sysmon/Operational"
     h_evt = win32event.CreateEvent(None, 0, 0, None)
